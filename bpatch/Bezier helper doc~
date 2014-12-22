@@ -1,0 +1,3 @@
+flags for compiling OpenGL C code in linux:
+
+cc -g -o norms norms.c -lm -lGL -lglut

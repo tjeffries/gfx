@@ -1,0 +1,239 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+#include <endian.h>
+#include <GL/glut.h>
+
+#define VSTR "element vertex "
+#define FSTR "element face "
+
+
+struct aface {
+	int v0, v1, v2;
+};
+
+int vertexCnt=0;
+float minx, miny, minz, maxx, maxy, maxz;
+
+int getModel(fname, d, vc, af, facecount)
+char *fname;//source (ply) file name
+float **d;//vertex array
+int *vc;//vertex count
+struct aface **af;//face array
+int *facecount;//face count
+{
+        FILE *f;
+
+        unsigned char *ptr, u1,u2,u3,u4;
+        float tf, fval;
+        int k, fvc, nextf, vcnt, fcnt;
+        char buf[1024], *s;
+        unsigned int u,i,j;
+
+        minx = miny = minz = 999999999.0f; /* really limits.h, FLT_MAX etc */
+        maxx = maxy = maxz = -999999999.0f;
+
+        if (! (f = fopen(fname, "r"))) {
+                fprintf(stderr, "getModel: %s fopen failed, errno= %d\n", fname, errno);
+                exit(1);
+        }
+        fgets(buf, sizeof(buf), f);
+        s=strchr(buf, '\n'); *s=0;
+        if (strcmp(buf, "ply"))
+                fprintf(stderr, "getModel: %s does not seem to be a ply file\n", fname);
+
+        while (strcmp(buf, "end_header")) {
+                fgets(buf, sizeof(buf), f);
+                s=strchr(buf, '\n'); *s=0;
+
+                if (s = strstr(buf, VSTR)) {
+                        s += strlen(VSTR);
+                        vcnt = atoi(s);
+printf("getModel: vertex count: %d\n", vcnt);
+                }
+
+                if (s = strstr(buf, FSTR)) {
+                        s += strlen(FSTR);
+                        fcnt = atoi(s);
+printf("getModel: face count: %d\n", fcnt);
+                }
+        }
+
+
+*vc=vcnt;
+
+	if ( (ptr = (unsigned char *) malloc(vcnt * 3 * sizeof(float))) == (unsigned char  *) -1) {
+                fprintf(stderr, " malloc failed, errno = %d\n", errno);
+                        exit(3);
+        }
+
+        fread(ptr, vcnt, 3*sizeof(float), f);
+
+        for (i=0; i<3*vcnt; i++) {
+                        u3=ptr[i*4+0];
+                        u4=ptr[i*4+1];
+                        u1=ptr[i*4+2];
+                        u2=ptr[i*4+3];
+
+                        ptr[i*4+0] = u2;
+                        ptr[i*4+1] = u1;
+                        ptr[i*4+2] = u4;
+                        ptr[i*4+3] = u3;
+        }
+        (*d) = (float *) malloc(vcnt * 3 * sizeof(float));
+        memcpy((*d), ptr, vcnt*3*sizeof(float));
+        free(ptr);
+
+
+
+
+printf("malloc %d bytes for   %d  faces\n", fcnt * sizeof(struct aface), fcnt);
+	(*af) = (struct aface *) malloc(fcnt * sizeof(struct aface));
+
+printf("get faces\n");
+	*facecount = fcnt;
+	for (i=0; i<fcnt; i++) {
+		fvc = fgetc(f);/* has to be triangles only */
+if (fvc != 3) {
+printf("REDALERT!, fvc = %d\n", fvc);
+sleep(10);
+}
+
+//printf("face %d has %d vertices: \n", i, fvc);
+		fread(&k, 1, sizeof(int), f);
+		(*af)[i].v0 = be32toh(k);
+//printf("0 = %d\n", (*af)[i].v0);
+
+		fread(&k, 1, sizeof(int), f);
+		(*af)[i].v1 = be32toh(k);
+//printf("1 = %d\n", (*af)[i].v1);
+
+		fread(&k, 1, sizeof(int), f);
+		(*af)[i].v2 = be32toh(k);
+//printf("0 = %d\n", (*af)[i].v2);
+//printf("done\n");
+	}
+printf("face[0]:  %d %d %d\n",  (*af)[0].v0,  (*af)[0].v1,  (*af)[0].v2);
+
+	for (i=0; i<vcnt; i++) {
+		switch (i%3) {
+			case 0:		maxx = ((*d)[i]>maxx) ? (*d)[i] : maxx;
+					minx = ((*d)[i]<minx) ? (*d)[i] : minx;
+					break;
+			case 1:		maxy = ((*d)[i]>maxy) ? (*d)[i] : maxy;
+					miny = ((*d)[i]<miny) ? (*d)[i] : miny;
+					break;
+			case 2:		maxz = ((*d)[i]>maxz) ? (*d)[i] : maxz;
+					minz = ((*d)[i]<minz) ? (*d)[i] : minz;
+					break;
+		}
+	}
+
+printf("getModel: minmax - %f %f %f   %f %f %f\n", minx,miny,minz,maxx,maxy,maxz);
+	fclose(f);
+
+	float divx;
+	float divy;
+	float divz;
+	float divm;//max range
+
+	minx = (minx<0) ? minx*(-1) : minx;
+	miny = (miny<0) ? miny*(-1) : miny;
+	minz = (minz<0) ? minz*(-1) : minz;
+	
+	maxx = (maxx<0) ? maxx*(-1) : maxx;
+	maxy = (maxy<0) ? maxy*(-1) : maxy;
+	maxz = (maxz<0) ? maxz*(-1) : maxz;
+
+	divx = (minx > maxx) ? minx : maxx;
+	divy = (miny > maxy) ? miny : maxy;
+	divz = (minz > maxz) ? minz : maxz;
+
+	divm = (divx > divy) ? ((divx > divz) ? divx : divz) : ((divy > divz) ? divy : divz);
+	//divm += 20;
+printf("divm: %f\n", divm);
+
+	for (i=0; i<vcnt; i++) {
+		switch (i%3) {
+			case 0:	
+					(*d)[i] = ((*d)[i]/divm);
+					//printf("divided x coord: %f\n", ((*d)[i]/divx));
+					break;
+			case 1:	
+					(*d)[i] = ((*d)[i]/divm);
+					break;
+			case 2:	
+					(*d)[i] = ((*d)[i]/divm);
+					break;
+		}
+	}
+
+
+	return(vcnt);
+}
+
+void reshape(int w, int h)
+{
+	printf("reshape\n");
+}
+
+void keyboard(unsigned char key, int x, int y)
+{
+	printf("keypress: %d    x: %d    y: %d\n", key, x, y);
+
+}
+
+int facecount;//face count
+float *va;//vertex array
+struct aface *af;//face array
+int vc;//vertex count
+
+void display(void)
+{
+    glClear(GL_COLOR_BUFFER_BIT);
+
+	glColor3f(1.0, 1.0, 1.0);
+    glBegin (GL_TRIANGLES);
+		int i;
+		printf("reached beginning of display loop\n");
+		for(i=0; i<facecount; i++) {
+			//printf("%f, %f, %f\n", va[af[i].v0*3+0], va[af[i].v0*3+1], va[af[i].v0*3+2]);
+			glVertex3f (va[af[i].v0*3+0], va[af[i].v0*3+1], va[af[i].v0*3+2]);
+			glVertex3f (va[af[i].v1*3+0], va[af[i].v1*3+1], va[af[i].v1*3+2]);
+			glVertex3f (va[af[i].v2*3+0], va[af[i].v2*3+1], va[af[i].v2*3+2]);
+		}
+    glEnd ();
+    glFlush();
+}
+
+main(argc, argv, envp)
+int argc;
+char **argv, **envp;
+{
+	int frame =0;
+	char *fname;//source (ply) file name
+	
+	
+	
+	if(argc != 2) {
+		printf("usage: run with file name token.\n");
+		exit(1);
+	}
+printf("program start.\n");
+
+	glutInit(&argc, argv);
+	//glutInitDisplayMode (GLUT_SINGLE | GLUT_INDEX);
+	//glutInitDisplayMode (GLUT_SINGLE);
+	glutInitWindowSize (800, 800);
+	glutCreateWindow (argv[0]);
+	getModel(argv[1], &va, &vc, &af, &facecount);
+	glutReshapeFunc (reshape);
+	glutKeyboardFunc(keyboard);
+	glutDisplayFunc (display);
+	glutMainLoop();
+
+printf("program end.\n");
+}
+
+
