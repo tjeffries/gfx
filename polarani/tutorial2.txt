@@ -1,0 +1,613 @@
+﻿TUTORIAL FOR OPENGL FUNCTIONS USING BEZIER CURVES
+
+OpenGL Evaluators:
+
+OpenGL includes Bézier-curve computation and drawing, in the form of evaluators. When you use an evaluator, you specify the control points and the usual drawing state (color, points or lines, etc.), but OpenGL does the glVertex… commands for you. Some example code using evaluators can be found in simpleevaluator.cpp and evaluator.cpp and also bezcurve.c, at the end of the tutorial.
+
+Usage of evaluators:
+
+We now look at how to use an evaluator, and then we will give some simple complete codes using these evaluators and draws Bezier curves. Some of our code comes from simpleevaluator.cpp.
+
+
+To draw Bezier Curves, first of all, control points are specified in an array as;
+
+const int numcontrolpts = 4;  			  // Number of control points
+
+//Below are coordinates of control points.
+GLfloat controlpts [numcontrolpts] [3] = {
+   {-0.9, -0.9,  0.0},
+   {-0.5,  0.2,  0.0}, 
+   { 0.9, -0.9,  0.0},
+   { 0.9,  0.9,  0.0}
+};
+
+Since 2-D points are not optional to draw Bezier Curves, z-coordinates are required and we set them zero. Then, we initialize an evaluator using glMap1… as;
+
+glMap1f (GL_MAP1_VERTEX_3,  		    // target: 1-d [curve],
+                            // 3 coordinates per point
+        0.0, 1.0,       					    // start & end parameters value
+        3,     					                // "stride": points stored
+                            					    // 3 GLfloat's apart
+        numcontrolpts,      				    // number of control points
+        &controlpts[0][0]); 				    // control point data
+
+Now, we enable an evaluator using glEnable…:
+
+glEnable (GL_MAP1_VERTEX_3); 		    // Enable this evaluator
+
+
+To do a “glVertex…” for a point on a Bézier curve, we use glEvalCoord1… It takes one argument which is the parameter of the Bézier curve (“t”). Thus, we can draw the whole curve as follows:
+
+Assume numdrawsegs is the number of line segments to use.
+
+glBegin(GL_LINE_STRIP);
+   for (int i=0; i<=numdrawsegs; ++i)
+   {
+      GLdouble t = GLdouble(i)/numdrawsegs;
+      glEvalCoord1d(t);
+   }
+glEnd();
+
+
+To simplify things even further, OpenGL allows you to specify a grid of parameter values using the function glMapGrid1... This function has 3 arguments which are:
+The number of line segments to draw.
+Starting parameter value.
+Ending parameter value.
+For example, to draw the same curve using an evaluator grid, we would do the following which is simpler than doing it manually.
+
+glMapGrid1d (numdrawsegs, 0.0, 1.0);
+
+Note that, if the number of segments changes, you have just to call glMapGrid1... again. You need not reinitialize the evaluator.
+
+
+To draw using an evaluator grid, you use glEvalMesh1… This function also has 3 arguments which are:
+What to draw: GL_LINE or GL_POINT.
+Starting point in the mesh (usually 0).
+How many segments (usually same as 1st argument to glMapGrid1…).
+Thus, with using glEvalMesh1…, the for-loop used earlier can be replaced by a single function call:
+
+glEvalMesh1 (GL_LINE, 0, numdrawsegs); 
+
+If you write your code in the form we have presented, then modifications will be both rare and easy. In particular, we can put them in order as follows:
+
+Keep the number of control points in a variable.
+Keep the number of segments to draw in a variable.
+Store the number of segments to draw, not the number of points (even if you are drawing points!), or you’ll get zillions of one-off errors.
+Always start your parameter at 0 and end at 1, and you’ll never wonder where it starts and ends.
+
+Each evaluator command with a “1” in its name has a corresponding command with a “2”, for Bézier surfaces. Bézier surfaces are not really useful in 2-D; we will not discuss them in this tutorial.
+
+
+Some simple and complete programs to draw Bezier Curves: 
+
+simpleevaluator.cpp
+// Very Simple OpenGL Evaluator Demo
+
+#include <iostream>
+#include <stdlib.h>
+
+#include <GL/glut.h> // GLUT stuff - includes OpenGL headers
+
+// For Bezier curve
+const int numcontrolpts = 4;  // Number of control points
+                              // Below are coord's of control points
+                             // (Must use 3 coord's each, even in 2-D.)
+GLfloat controlpts[numcontrolpts][3] = {
+   {-0.9, -0.9,  0.0},
+   {-0.5,  0.2,  0.0}, 
+   { 0.9, -0.9,  0.0},
+   { 0.9,  0.9,  0.0}
+};
+
+int numdrawsegs = 20;         // Number of segments drawn in the Bezier curve
+
+const int startwinsize = 400; // Starting window width & height, in pixels
+
+
+// The GLUT display function
+void display()
+{
+   // Clear screen
+   glClear(GL_COLOR_BUFFER_BIT);
+
+   // Draw Bezier curve
+   glColor3d(0.9, 0.1, 0.1);
+   glLineWidth(3.0);
+
+   glEvalMesh1(GL_LINE, 0, numdrawsegs);
+
+   // Here, We used an evaluator grid.
+   // Code to do the same thing, "manually", is as follows:
+
+   //glBegin(GL_LINE_STRIP);
+   //   for (int i=0; i<=numdrawsegs; ++i)
+   //      glEvalCoord1d(GLdouble(i)/numdrawsegs);
+   //glEnd();
+
+   glutSwapBuffers();
+}
+
+
+// The GLUT reshape function
+void reshape(int w, int h)
+{
+   glViewport(0, 0, w, h);
+
+   glMatrixMode(GL_PROJECTION);
+   glLoadIdentity();
+   // We set up coordinate system so that aspect ratios are always correct,
+   //  and the region from -1..1 in x & y always just fits in the viewport.
+   if (w > h)
+   {
+      gluOrtho2D(-double(w)/h, double(w)/h, -1., 1.);
+   }
+   else
+   {
+      gluOrtho2D( -1., 1., -double(h)/w, double(h)/w);
+   }
+
+   glMatrixMode(GL_MODELVIEW);  // Always go back to modelview mode
+   glLoadIdentity();
+}
+
+
+// The GLUT keyboard function
+void keyboard(unsigned char key, int x, int y)
+{
+   switch (key)
+   {
+   case 27:  // Escape Key -- good way to quit
+      exit(0);  // Quit
+      break;
+   }
+}
+
+
+// Initializes GL states
+void init()
+{
+   // Set background color
+   glClearColor(1.0, 1.0, 1.0, 0.0);
+
+   // Set up Bezier curve evaluator
+   glMap1f(GL_MAP1_VERTEX_3,   // target: 1-d [curve], 3 coord's per pt
+           0.0, 1.0,           // start & end param value
+           3,                  // "stride": pts stored 3 GLfloat's apart
+           numcontrolpts,      // no. of control points
+           &controlpts[0][0]); // control pt data
+   glEnable(GL_MAP1_VERTEX_3); // Enable this evaluator
+
+   // Set up grid for evaluator.
+   // This only needs to be done when using glEvalMesh1.
+   glMapGrid1d(numdrawsegs, 0.0, 1.0);
+}
+
+
+int main(int argc, char ** argv)
+{
+   glutInit(&argc, argv);
+   glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB);
+   glutInitWindowSize(startwinsize, startwinsize);
+   glutInitWindowPosition(50, 50);
+   glutCreateWindow("CS 381 - Simple OpenGL Evaluator Demo");
+
+   init();
+   glutDisplayFunc(display);
+   glutReshapeFunc(reshape);
+   glutKeyboardFunc(keyboard);
+
+
+   glutMainLoop();
+
+   return 0;
+}
+
+
+evaluator.cpp
+// OpenGL Evaluator Demo
+
+// This program draws a Bezier curve using an OpenGL evaluator.
+// Includes examples both of using an evaluator grid
+//  and using "manual" loops.
+
+#include <iostream>
+using std::cerr;
+using std::endl;
+#include <string>
+using std::string;
+#include <sstream>
+using std::ostringstream;
+#include <stdlib.h>
+//using std::exit;
+#include <GL/glut.h> // GLUT stuff - includes OpenGL headers
+
+// Global variables
+// For Bezier curve
+const int numcontrolpts = 4;  // Number of control points
+                              // Below are coord's of control points
+                              // (Must use 3 coord's each, even in 2-D.)
+GLfloat controlpts[numcontrolpts][3] = {
+   {-0.9, -0.9,  0.0},
+   {-0.5,  0.2,  0.0}, 
+   { 0.9, -0.9,  0.0},
+   { 0.9,  0.9,  0.0}
+};
+
+int numdrawsegs = 10;         // Number of segments drawn in the Bezier curve
+const int minnumdrawsegs = 1;
+const int maxnumdrawsegs = 50;
+
+bool drawcurve = true;        // true: draw Bezier curve
+bool drawcurvepts = false;    // true: draw points used to approx curve
+bool drawcontrolpts = true;   // true: draw control points for curve
+bool drawcontrolpoly = false; // true: draw control polygon for curve
+
+// For window
+const int startwinsize = 400; // Starting window width & height, in pixels
+
+
+// display
+// The GLUT display function
+void display()
+{
+   int i;  // Loop counter
+
+   // Set up grid for evaluator
+   // THIS IS ONLY NEEDED IF YOU USE "glEvalMesh1"!!!
+   glMapGrid1d(numdrawsegs, 0.0, 1.0);
+
+   // Clear screen
+   glClear(GL_COLOR_BUFFER_BIT);
+
+   // Draw control points for Bezier curve
+   if (drawcontrolpts)
+   {
+      glColor3d(0.1, 0.1, 0.9);
+      glPointSize(20.0);
+      glBegin(GL_POINTS);
+         for (i=0; i<numcontrolpts; ++i)
+            glVertex3fv(controlpts[i]);
+      glEnd();
+   }
+
+   // Draw control polygon for Bezier curve
+   if (drawcontrolpoly)
+   {
+      glColor3d(0.9, 0.1, 0.9);
+      glLineWidth(1.0);
+      glBegin(GL_LINE_STRIP);
+         for (i=0; i<numcontrolpts; ++i)
+            glVertex3fv(controlpts[i]);
+      glEnd();
+   }
+
+   // Draw points on Bezier curve
+   if (drawcurvepts)
+   {
+      glColor3d(0.1, 0.7, 0.1);
+      glPointSize(15.0);
+
+      glBegin(GL_POINTS);
+         for (i=0; i<=numdrawsegs; ++i)
+            glEvalCoord1d(GLdouble(i)/numdrawsegs);
+      glEnd();
+
+      // I did the above "manually".
+      // Code to do the same thing, using an evaluator grid, is as follows:
+
+      //glEvalMesh1(GL_POINT, 0, numdrawsegs);
+   }
+
+   // Draw Bezier curve
+   if (drawcurve)
+   {
+      glColor3d(0.9, 0.1, 0.1);
+      glLineWidth(3.0);
+
+      glEvalMesh1(GL_LINE, 0, numdrawsegs);
+
+      // Here, I used an evaluator grid.
+      // Code to do the same thing, "manually", is as follows:
+
+      //glBegin(GL_LINE_STRIP);
+      //   for (i=0; i<=numdrawsegs; ++i)
+      //      glEvalCoord1d(GLdouble(i)/numdrawsegs);
+      //glEnd();
+   }
+
+   // Write instructions in drawing window
+   ostringstream out;
+   out << "<- -> Change number of segments ["
+       << numdrawsegs
+       << "]";
+   string msg = out.str();
+   glColor3d(0.0, 0.0, 0.0);
+   glRasterPos2d(-0.95, 0.85);
+   string::iterator ii;
+   for (ii=msg.begin(); ii!=msg.end(); ++ii)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *ii);
+
+   msg = string("Q     Toggle curve [")
+       + (drawcurve ? "X" : " ")
+       + "]";
+   glColor3d(0.9, 0.1, 0.1);
+   glRasterPos2d(-0.95, 0.75);
+   for (ii=msg.begin(); ii!=msg.end(); ++ii)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *ii);
+
+   msg = string("W     Toggle pts on curve [")
+       + (drawcurvepts ? "X" : " ")
+       + "]";
+   glColor3d(0.1, 0.7, 0.1);
+   glRasterPos2d(-0.95, 0.65);
+   for (ii=msg.begin(); ii!=msg.end(); ++ii)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *ii);
+
+   msg = string("A     Toggle control polygon [")
+       + (drawcontrolpoly ? "X" : " ")
+       + "]";
+   glColor3d(0.9, 0.1, 0.9);
+   glRasterPos2d(-0.95, 0.55);
+   for (ii=msg.begin(); ii!=msg.end(); ++ii)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *ii);
+
+   msg = string("S     Toggle control pts [")
+       + (drawcontrolpts ? "X" : " ")
+       + "]";
+   glColor3d(0.1, 0.1, 0.9);
+   glRasterPos2d(-0.95, 0.45);
+   for (ii=msg.begin(); ii!=msg.end(); ++ii)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *ii);
+
+   glutSwapBuffers();
+}
+
+
+// reshape
+// The GLUT reshape function
+void reshape(int w, int h)
+{
+   glViewport(0, 0, w, h);
+
+   glMatrixMode(GL_PROJECTION);
+   glLoadIdentity();
+   // We set up coordinate system so that aspect ratios are always correct,
+   //  and the region from -1..1 in x & y always just fits in the viewport.
+   if (w > h)
+   {
+      gluOrtho2D(-double(w)/h, double(w)/h, -1., 1.);
+   }
+   else
+   {
+      gluOrtho2D( -1., 1., -double(h)/w, double(h)/w);
+   }
+
+   glMatrixMode(GL_MODELVIEW);  // Always go back to modelview mode
+   glLoadIdentity();
+}
+
+
+// keyboard
+// The GLUT keyboard function
+void keyboard(unsigned char key, int x, int y)
+{
+   switch (key)
+   {
+   case 27:  // Escape Key -- good way to quit
+      exit(0);  // Quit
+      break;
+   case 'q':
+   case 'Q':
+      drawcurve = !drawcurve;
+      glutPostRedisplay();
+      break;
+   case 'w':
+   case 'W':
+      drawcurvepts = !drawcurvepts;
+      glutPostRedisplay();
+      break;
+   case 'a':
+   case 'A':
+      drawcontrolpoly = !drawcontrolpoly;
+      glutPostRedisplay();
+      break;
+   case 's':
+   case 'S':
+      drawcontrolpts = !drawcontrolpts;
+      glutPostRedisplay();
+      break;
+   }
+}
+
+
+// special
+// The GLUT special function
+void special(int key, int x, int y)
+{
+   switch (key)
+   {
+   case GLUT_KEY_LEFT:
+      --numdrawsegs;
+      if (numdrawsegs < minnumdrawsegs) numdrawsegs = minnumdrawsegs;
+      glutPostRedisplay();
+      break;
+   case GLUT_KEY_RIGHT:
+      ++numdrawsegs;
+      if (numdrawsegs > maxnumdrawsegs) numdrawsegs = maxnumdrawsegs;
+      glutPostRedisplay();
+      break;
+   }
+}
+
+
+// idle
+// The GLUT idle function
+void idle()
+{
+   // Print OpenGL errors, if there are any (for debugging)
+   if (GLenum err = glGetError())
+   {
+      cerr << "OpenGL ERROR: " << gluErrorString(err) << endl;
+   }
+}
+
+
+// init
+// Initializes GL states
+// Called by main
+void init()
+{
+   // Set background color
+   glClearColor(1.0, 1.0, 1.0, 0.0);
+
+   // Set up Bezier curve evaluator
+   glMap1f(GL_MAP1_VERTEX_3,   // target: 1-d [curve], 3 coord's per pt
+           0.0, 1.0,           // start & end param value
+           3,                  // "stride": pts stored 3 GLfloat's apart
+           numcontrolpts,      // no. of control points
+           &controlpts[0][0]); // control pt data
+   glEnable(GL_MAP1_VERTEX_3); // Enable this evaluator
+}
+
+
+int main(int argc, char ** argv)
+{
+// Initialize OpenGL/GLUT
+   glutInit(&argc, argv);
+   glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB);
+
+// Make a window
+   glutInitWindowSize(startwinsize, startwinsize);
+   glutInitWindowPosition(50, 50);
+   glutCreateWindow("CS 381 - OpenGL Evaluator Demo");
+
+// Initialize GL states & register callbacks
+   init();
+   glutDisplayFunc(display);
+   glutReshapeFunc(reshape);
+   glutKeyboardFunc(keyboard);
+   glutSpecialFunc(special);
+   glutIdleFunc(idle);
+
+// Do something
+   glutMainLoop();
+
+   return 0;
+}
+
+
+/*
+ * Copyright (c) 1993-1999, Silicon Graphics, Inc.
+ * ALL RIGHTS RESERVED 
+ * Permission to use, copy, modify, and distribute this software for 
+ * any purpose and without fee is hereby granted, provided that the above
+ * copyright notice appear in all copies and that both the copyright notice
+ * and this permission notice appear in supporting documentation, and that 
+ * the name of Silicon Graphics, Inc. not be used in advertising
+ * or publicity pertaining to distribution of the software without specific,
+ * written prior permission. 
+ *
+ * THE MATERIAL EMBODIED ON THIS SOFTWARE IS PROVIDED TO YOU "AS-IS"
+ * AND WITHOUT WARRANTY OF ANY KIND, EXPRESS, IMPLIED OR OTHERWISE,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTY OF MERCHANTABILITY OR
+ * FITNESS FOR A PARTICULAR PURPOSE.  IN NO EVENT SHALL SILICON
+ * GRAPHICS, INC.  BE LIABLE TO YOU OR ANYONE ELSE FOR ANY DIRECT,
+ * SPECIAL, INCIDENTAL, INDIRECT OR CONSEQUENTIAL DAMAGES OF ANY
+ * KIND, OR ANY DAMAGES WHATSOEVER, INCLUDING WITHOUT LIMITATION,
+ * LOSS OF PROFIT, LOSS OF USE, SAVINGS OR REVENUE, OR THE CLAIMS OF
+ * THIRD PARTIES, WHETHER OR NOT SILICON GRAPHICS, INC.  HAS BEEN
+ * ADVISED OF THE POSSIBILITY OF SUCH LOSS, HOWEVER CAUSED AND ON
+ * ANY THEORY OF LIABILITY, ARISING OUT OF OR IN CONNECTION WITH THE
+ * POSSESSION, USE OR PERFORMANCE OF THIS SOFTWARE.
+ * 
+ * US Government Users Restricted Rights 
+ * Use, duplication, or disclosure by the Government is subject to
+ * restrictions set forth in FAR 52.227.19(c)(2) or subparagraph
+ * (c)(1)(ii) of the Rights in Technical Data and Computer Software
+ * clause at DFARS 252.227-7013 and/or in similar or successor
+ * clauses in the FAR or the DOD or NASA FAR Supplement.
+ * Unpublished-- rights reserved under the copyright laws of the
+ * United States.  Contractor/manufacturer is Silicon Graphics,
+ * Inc., 2011 N.  Shoreline Blvd., Mountain View, CA 94039-7311.
+ *
+ * OpenGL(R) is a registered trademark of Silicon Graphics, Inc.
+ */
+
+/*  bezcurve.c			
+ *  This program uses evaluators to draw a Bezier curve.
+ */
+
+#include <GL/glut.h>
+#include <stdlib.h>
+
+GLfloat ctrlpoints[4][3] = {
+	{ -4.0, -4.0, 0.0}, { -2.0, 4.0, 0.0}, 
+	{2.0, -4.0, 0.0}, {4.0, 4.0, 0.0}};
+
+void init(void)
+{
+   glClearColor(0.0, 0.0, 0.0, 0.0);
+   glShadeModel(GL_FLAT);
+   glMap1f(GL_MAP1_VERTEX_3, 0.0, 1.0, 3, 4, &ctrlpoints[0][0]);
+   glEnable(GL_MAP1_VERTEX_3);
+}
+
+void display(void)
+{
+   int i;
+
+   glClear(GL_COLOR_BUFFER_BIT);
+   glColor3f(1.0, 1.0, 1.0);
+   glBegin(GL_LINE_STRIP);
+      for (i = 0; i <= 30; i++) 
+         glEvalCoord1f((GLfloat) i/30.0);
+   glEnd();
+   /* The following code displays the control points as dots. */
+   glPointSize(5.0);
+   glColor3f(1.0, 1.0, 0.0);
+   glBegin(GL_POINTS);
+      for (i = 0; i < 4; i++) 
+         glVertex3fv(&ctrlpoints[i][0]);
+   glEnd();
+   glFlush();
+}
+
+void reshape(int w, int h)
+{
+   glViewport(0, 0, (GLsizei) w, (GLsizei) h);
+   glMatrixMode(GL_PROJECTION);
+   glLoadIdentity();
+   if (w <= h)
+      glOrtho(-5.0, 5.0, -5.0*(GLfloat)h/(GLfloat)w, 
+               5.0*(GLfloat)h/(GLfloat)w, -5.0, 5.0);
+   else
+      glOrtho(-5.0*(GLfloat)w/(GLfloat)h, 
+               5.0*(GLfloat)w/(GLfloat)h, -5.0, 5.0, -5.0, 5.0);
+   glMatrixMode(GL_MODELVIEW);
+   glLoadIdentity();
+}
+
+void keyboard(unsigned char key, int x, int y)
+{
+   switch (key) {
+      case 27:
+         exit(0);
+         break;
+   }
+}
+
+int main(int argc, char** argv)
+{
+   glutInit(&argc, argv);
+   glutInitDisplayMode (GLUT_SINGLE | GLUT_RGB);
+   glutInitWindowSize (500, 500);
+   glutInitWindowPosition (100, 100);
+   glutCreateWindow (argv[0]);
+   init ();
+   glutDisplayFunc(display);
+   glutReshapeFunc(reshape);
+   glutKeyboardFunc (keyboard);
+   glutMainLoop();
+   return 0;
+}
+

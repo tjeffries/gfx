@@ -1,0 +1,350 @@
+#include <GL/gl.h>
+#include <GL/glu.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <GL/glut.h>
+#include <math.h>
+
+float ctlmods[6][4][4][3];
+
+GLfloat ctrlpoints[6][4][4][3];
+
+float anglex, angley, anglez, scale, clock, jclock, translatey;
+int bouncing, jumping;
+
+void display(void)
+{
+   int i, j, k, face;
+   
+   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+   //glColor3f(1.0, 1.0, 1.0);
+   glPushMatrix ();
+   glRotatef(anglex, 1.0, 0, 0);
+   glRotatef(angley, 0, 1.0, 0);
+   glRotatef(anglez, 0, 0, 1.0);
+   //draw axes:
+   glColor3f(.8, 0, 0);
+   glBegin(GL_LINE_STRIP);
+		glVertex3f(-.8, 0, 0);
+		glVertex3f(.8, 0, 0);
+   glEnd();
+   glBegin(GL_LINE_STRIP);
+		glVertex3f(0, -.8, 0);
+		glVertex3f(0, .8, 0);
+   glEnd();
+   glBegin(GL_LINE_STRIP);
+		glVertex3f(0, 0, -.8);
+		glVertex3f(0, 0, .8);
+   glEnd();
+   //draw bezier patch(s)
+   for(face=0; face<6; face++) {
+		//apply all changes from ctlmods to ctrlpoints
+		for(i=0; i<4; i++)
+			for(j=0; j<4; j++)
+				for(k=0; k<3; k++){
+					ctrlpoints[face][i][j][k] = ((ctrlpoints[face][i][j][k]*scale) + ctlmods[face][i][j][k]);
+					ctrlpoints[face][i][j][1] += translatey;
+				}
+	
+		glMap2f(GL_MAP2_VERTEX_3, 0, 1, 3, 4,
+		        0, 1, 12, 4, &ctrlpoints[face][0][0][0]);
+		glEnable(GL_MAP2_VERTEX_3);
+		glMapGrid2f(40, 0.0, 1.0, 40, 0.0, 1.0);
+		
+			//glEvalMesh2(GL_FILL, 0, 40, 0, 40);
+		for (j = 0; j <= 8; j++) {
+      glBegin(GL_LINE_STRIP);
+		   for (i = 0; i <= 30; i++)
+		      glEvalCoord2f((GLfloat)i/30.0, (GLfloat)j/8.0);
+		   glEnd();
+		   glBegin(GL_LINE_STRIP);
+		   for (i = 0; i <= 30; i++)
+		      glEvalCoord2f((GLfloat)j/8.0, (GLfloat)i/30.0);
+      glEnd();
+   	}
+
+		//remove all changes from ctlmods
+		for(i=0; i<4; i++)
+			for(j=0; j<4; j++)
+				for(k=0; k<3; k++){
+					ctrlpoints[face][i][j][1] -= translatey;
+					ctrlpoints[face][i][j][k] = ((ctrlpoints[face][i][j][k] - ctlmods[face][i][j][k])/scale);
+				}
+		//printf("display face #%d\n", face);
+	}
+
+   glPopMatrix ();
+   glFlush();
+}
+
+void init(void)
+{
+	int i, j, k, face;
+   int ctlw, ctlh;
+   ctlw = ctlh = 4;//width and height of control point array
+	float max, min, div, angle;
+	float pi = 3.14159;
+	bouncing = translatey = clock = jclock = 0;
+	anglex = 15;
+	angley = -15;
+	anglez = 0;
+	scale = 1;
+	
+	GLfloat tmppts[4][4][3] = {
+   /*1*/{{-6, -6, 6}, {-2, -6, 6}, 
+    	{2, -6, 6}, {6, -6, 6}}, 
+   /*2*/{{-6, -2, 6}, {-2, -2, 6}, 
+    	{2, -2, 6}, {6, -2, 6}}, 
+   /*3*/{{-6, 2, 6}, {-2, 2, 6}, 
+    	{2, 2, 6}, {6, 2, 6}}, 
+   /*4*/{{-6, 6, 6}, {-2, 6, 6}, 
+    	{2, 6, 6}, {6, 6, 6}}
+	};
+	
+	//set face values based tmppts, rotated and translated
+	for(face=0; face<6; face++)
+		for(i=0; i<ctlw; i++)
+			for(j=0; j<ctlh; j++){
+				if(face < 4){
+					angle = (pi*face)/2;
+					ctrlpoints[face][i][j][0] = ((tmppts[i][j][0]*cosf(angle)) -(tmppts[i][j][2]*sinf(angle)) );
+					ctrlpoints[face][i][j][1] = tmppts[i][j][1];
+					ctrlpoints[face][i][j][2] = ((tmppts[i][j][0]*sinf(angle)) +(tmppts[i][j][2]*cosf(angle)) );
+				} else{//top and bottom faces
+					angle = (face == 4) ? 3*pi/2 : pi/2;
+					ctrlpoints[face][i][j][0] = tmppts[i][j][0];
+					ctrlpoints[face][i][j][1] = ((tmppts[i][j][1]*cosf(angle)) +(tmppts[i][j][2]*sinf(angle)) );
+					ctrlpoints[face][i][j][2] = (-(tmppts[i][j][1]*sinf(angle)) +(tmppts[i][j][2]*cosf(angle)) );
+				}
+			}
+	/*
+	printf("mid left: %f %f %f\n", ctrlpoints[1][0][1][0], ctrlpoints[1][0][1][1], ctrlpoints[1][0][1][2]);
+	ctrlpoints[1][0][1][0] += 2;
+	*/
+	
+	//check max and min
+	max = min = div = 0;
+	for(face=0; face<6; face++)
+		for(i=0; i<ctlw; i++)
+			for(j=0; j<ctlh; j++)
+				for(k=0; k<3; k++){
+					max = (ctrlpoints[face][i][j][k] > max) ? ctrlpoints[face][i][j][k] : max;
+					min = (ctrlpoints[face][i][j][k] < min) ? ctrlpoints[face][i][j][k] : min;
+				}
+	
+	div = (fabsf(max) > fabsf(min)) ? fabsf(max) : fabsf(min);
+	//printf("max = %f\nmin = %f\ndiv = %f\n", max, min, div);
+	//printf("max = %f\nmin = %f\n\n", max, min);
+	//normalize control points to 1/4th size, in a -1 to +1 bounded space
+	
+	for(face=0; face<6; face++)
+		for(i=0; i<ctlw; i++)
+			for(j=0; j<ctlh; j++)
+				for(k=0; k<3; k++){
+					ctrlpoints[face][i][j][k] = (ctrlpoints[face][i][j][k] / (div*8));
+					//set ctlmods to 0
+					ctlmods[face][i][j][k] = 0;
+				}
+	
+	
+	glClearColor (0.0, 0.0, 0.0, 0.0);
+	glEnable(GL_DEPTH_TEST);
+	glShadeModel(GL_FLAT);
+   glutInitDisplayMode(GLUT_SINGLE);
+}
+
+void initlights(void)
+{
+   GLfloat ambient[] = {0.2, 0.2, 0.2, 1.0};
+   GLfloat position[] = {0.0, 0.0, 2.0, 1.0};
+   GLfloat mat_diffuse[] = {0.6, 0.6, 0.6, 1.0};
+   GLfloat mat_specular[] = {2.8, 2.8, 1.0, 1.0};
+   GLfloat mat_shininess[] = {50.0};
+
+   glEnable(GL_LIGHTING);
+   glEnable(GL_LIGHT0);
+
+   glLightfv(GL_LIGHT0, GL_AMBIENT, ambient);
+   glLightfv(GL_LIGHT0, GL_POSITION, position);
+
+   glMaterialfv(GL_FRONT, GL_DIFFUSE, mat_diffuse);
+   glMaterialfv(GL_FRONT, GL_SPECULAR, mat_specular);
+   glMaterialfv(GL_FRONT, GL_SHININESS, mat_shininess);
+}
+
+void reshape(int x, int y){
+		//printf("reshape\n");
+}
+
+void swell(float n){
+	//swell all 4 faces, from middle points outwards
+	int i, j, k, face;
+//printf("swell called\n");
+	for(face=0; face<4; face++)
+		for(i=0; i<4; i++)
+			for(j=0; j<4; j++){
+				if((i%4==1 || i%4==2) && (j%4==1 || j%4==2)){//non-edge points only
+				//printf("reached inside swell. n=%f\n", n);
+					if(ctrlpoints[face][i][j][0] < 0)
+						ctlmods[face][i][j][0] -= n;
+					else
+						ctlmods[face][i][j][0] += n;
+					if(ctrlpoints[face][i][j][2] < 0)
+						ctlmods[face][i][j][2] -= n;
+					else
+						ctlmods[face][i][j][2] += n;
+				}
+				if((i%4==1 || i%4==2) && (j%4==0 || j%4==3)){//middle-edge points only
+					if(ctrlpoints[face][i][j][0] < 0)
+						ctlmods[face][i][j][0] -= n*3/5;
+					else
+						ctlmods[face][i][j][0] += n*3/5;
+					if(ctrlpoints[face][i][j][2] < 0)
+						ctlmods[face][i][j][2] -= n*3/5;
+					else
+						ctlmods[face][i][j][2] += n*3/5;
+				}
+			}
+}
+
+void flatten(float n){
+	int i, j, face;
+//printf("flatten called\n");
+	for(face=0; face<6; face++)
+		for(i=0; i<4; i++)
+			for(j=0; j<4; j++){
+				ctlmods[face][i][j][1] += ((ctrlpoints[face][i][j][1]+(.125))*n);
+			}
+//printf("lower bound: %f\n", (ctrlpoints[4][0][0][1]+(.125))*n);
+}
+
+
+void bounce(void){
+	float change;
+	float pi = 3.14159;
+//printf("bouncing = %d\n", bouncing);
+	change = (bouncing > 0) ? (sinf(clock) )/((bouncing==6) ? 12 : bouncing) : sinf(clock);
+//printf("mod = %f\n", (.1-(.2*(bouncing))));
+//printf("clock = %f\n", clock);
+		swell(.01*change);
+		flatten(.01*-2*change);
+//printf("swell input: %f\n", change*(1/bouncing+.01));
+//printf("flatten input: %f\n", -2*change*(1/bouncing+.01));
+	clock += (pi/30);
+	if(clock > 2*pi) {
+		clock = 0;
+		bouncing++;
+	}
+	if(bouncing > 6)
+		bouncing = 0;
+}
+
+void jhelper(void){
+	int i, j, k, face;
+//printf("jump called\n");
+//printf("jumping = %d\n", jumping);
+	jclock += .01;
+//printf("jclock = %f\n", jclock);
+	translatey = .1*(2-2*((jclock-1)*(jclock-1)));
+//printf("translatey = %f\n", translatey);
+	if(jclock > 1 && translatey < .05 && bouncing ==0)
+		bouncing = 1;
+	if(translatey < 0){
+		translatey = 0;
+		jumping = 0;
+		jclock = 0;
+		//bouncing = 1;
+	}
+//printf("jumping = %d\n", jumping);
+}
+
+void jump(void){
+	jumping = 1;
+	bouncing = -1;
+}
+
+void drawclock(int n){
+	float pi = 3.14159;
+	//angley -= .5;
+	if(bouncing != 0)
+		bounce();
+	if(jumping != 0 && ((bouncing ==0) || jclock > 1 || clock > 2*pi-.5) )
+		jhelper();
+	display();
+	glutTimerFunc(n, drawclock, n);
+}
+
+void keyboard(unsigned char key, int x, int y){
+		//printf("Keypress: %d   X: %d   Y: %d\n", key, x, y);
+		if(key == 119)//w key pressed
+			anglex -= 3;
+		if(key == 115)//s key pressed
+			anglex += 3;
+		if(key == 97)//keypress 'a'
+			angley -= 3;
+		if(key == 100)//keypress 'd'
+			angley += 3;
+		if(key == 113)//keypress 'q'
+			anglez += 3;
+		if(key == 101)//keypress 'e'
+			anglez -= 3;
+		if(key == 61)//keypress '+'
+			scale *= 1.1;
+		if(key == 45)//keypress '-'
+			scale *= .9;
+		//swell
+		if(key == 57)//keypress '('
+			swell(-.01);
+		if(key == 48)//keypress ')'
+			swell(.01);
+		//flatten
+		if(key == 55)//keypress '7'
+			flatten(-.02);
+		if(key == 56)//keypress '8'
+			flatten(.02);
+		//swell and flatten
+		if(key == 91){//keypress '['
+			swell(.01);
+			flatten(-.02);
+		}
+		if(key == 93){//keypress ']'
+			swell(-.01);
+			flatten(.02);
+		}
+		if(key == 104)//keypress 'h'
+			printf("Usage con't: \nto flatten and unflatten press keys '7' and '8'.\nto bulge and unbulge press '(' and ')'.\nto combined buldge and flatten/unbulge and unflatten press '[' and ']'.\n");
+		//bounce!
+		if(key == 13 && jumping == 0 && bouncing == 0)//keypress 'ENTER'
+			bouncing = 1;
+		//jump
+		if(key == 8 && jumping == 0 && bouncing == 0)//keypress 'BACKSPACE'
+			jump();
+		//reset all rotation and scale to zero
+		if(key == 32) {//keypress 'space'
+			anglex = 0;
+			angley = 0;
+			anglez = 0;
+			scale = 1;
+		}
+		//mod all angles to -360 : 360
+		anglex = fmodf(anglex, 360);
+		angley = fmodf(angley, 360);
+		anglez = fmodf(anglez, 360);
+		//printf("anglex = %f\n", anglex);
+		display();
+}
+
+main(int argc, char **argv, char **envp)
+{
+	printf("Usage: \nrotate x, y, and z axes with WASDQ&E keys. Press 'SPACE' to reset all rotations to zero.\nPress 'BACKSPACE' key to make cube perform an animated jump and bouncy landing.\nfor more commands, press 'h' with focus  window.\n");
+        glutInit(&argc, argv);
+        glutInitWindowSize(1000, 1000);
+        glutCreateWindow(argv[0]);
+        init();
+        initlights();
+        glutReshapeFunc(reshape);
+        glutKeyboardFunc(keyboard);
+        glutDisplayFunc(display);
+        drawclock(5);
+        glutMainLoop();
+}

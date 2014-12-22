@@ -1,0 +1,404 @@
+//#include <iostream>
+//using std::cerr;
+//using std::endl;
+//#include <string>
+//using std::string;
+//#include <sstream>
+//using std::ostringstream;
+#include <stdlib.h>
+//using std::exit;
+#include <stdlib.h>
+#include <stdio.h>
+#include <math.h>
+#include <GL/glut.h> // GLUT stuff - includes OpenGL headers
+
+// Global variables
+// For Bezier curve
+int numcontrolpts = 4;  // Number of control points
+                              // Below are coord's of control points
+                              // (Must use 3 coord's each, even in 2-D.)
+GLfloat controlpts[numcontrolpts][3] = {
+   {-0.9, -0.9,  0.0},
+   {-0.5,  0.2,  0.0}, 
+   { 0.9, -0.9,  0.0},
+   { 0.9,  0.9,  0.0}
+};
+
+int numdrawsegs = 10;         // Number of segments drawn in the Bezier curve
+const int minnumdrawsegs = 1;
+const int maxnumdrawsegs = 50;
+
+bool drawcurve = true;        // true: draw Bezier curve
+bool drawcurvepts = false;    // true: draw points used to approx curve
+bool drawcontrolpts = true;   // true: draw control points for curve
+bool drawcontrolpoly = false; // true: draw control polygon for curve
+
+// For window
+const int startwinsize = 400; // Starting window width & height, in pixels
+
+
+// display
+// The GLUT display function
+void display()
+{
+   int i;  // Loop counter
+
+   // Set up grid for evaluator
+   // THIS IS ONLY NEEDED IF YOU USE "glEvalMesh1"!!!
+   glMapGrid1d(numdrawsegs, 0.0, 1.0);
+
+   // Clear screen
+   glClear(GL_COLOR_BUFFER_BIT);
+
+   // Draw control points for Bezier curve
+   if (drawcontrolpts)
+   {
+      glColor3d(0.1, 0.1, 0.9);
+      glPointSize(20.0);
+      glBegin(GL_POINTS);
+         for (i=0; i<numcontrolpts; ++i)
+            glVertex3fv(controlpts[i]);
+      glEnd();
+   }
+
+   // Draw control polygon for Bezier curve
+   if (drawcontrolpoly)
+   {
+      glColor3d(0.9, 0.1, 0.9);
+      glLineWidth(1.0);
+      glBegin(GL_LINE_STRIP);
+         for (i=0; i<numcontrolpts; ++i)
+            glVertex3fv(controlpts[i]);
+      glEnd();
+   }
+
+   // Draw points on Bezier curve
+   if (drawcurvepts)
+   {
+      glColor3d(0.1, 0.7, 0.1);
+      glPointSize(15.0);
+
+      glBegin(GL_POINTS);
+         for (i=0; i<=numdrawsegs; ++i)
+            glEvalCoord1d(GLdouble(i)/numdrawsegs);
+      glEnd();
+
+      // I did the above "manually".
+      // Code to do the same thing, using an evaluator grid, is as follows:
+
+      //glEvalMesh1(GL_POINT, 0, numdrawsegs);
+   }
+
+   // Draw Bezier curve
+   if (drawcurve)
+   {
+      glColor3d(0.9, 0.1, 0.1);
+      glLineWidth(3.0);
+
+      glEvalMesh1(GL_LINE, 0, numdrawsegs);
+
+      // Here, I used an evaluator grid.
+      // Code to do the same thing, "manually", is as follows:
+
+      //glBegin(GL_LINE_STRIP);
+      //   for (i=0; i<=numdrawsegs; ++i)
+      //      glEvalCoord1d(GLdouble(i)/numdrawsegs);
+      //glEnd();
+   }
+
+   // Write instructions in drawing window
+   ostringstream out;
+   out << "<- -> Change number of segments ["
+       << numdrawsegs
+       << "]";
+   string msg = out.str();
+   glColor3d(0.0, 0.0, 0.0);
+   glRasterPos2d(-0.95, 0.85);
+   string::iterator ii;
+   for (ii=msg.begin(); ii!=msg.end(); ++ii)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *ii);
+
+   msg = string("Q     Toggle curve [")
+       + (drawcurve ? "X" : " ")
+       + "]";
+   glColor3d(0.9, 0.1, 0.1);
+   glRasterPos2d(-0.95, 0.75);
+   for (ii=msg.begin(); ii!=msg.end(); ++ii)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *ii);
+
+   msg = string("W     Toggle pts on curve [")
+       + (drawcurvepts ? "X" : " ")
+       + "]";
+   glColor3d(0.1, 0.7, 0.1);
+   glRasterPos2d(-0.95, 0.65);
+   for (ii=msg.begin(); ii!=msg.end(); ++ii)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *ii);
+
+   msg = string("A     Toggle control polygon [")
+       + (drawcontrolpoly ? "X" : " ")
+       + "]";
+   glColor3d(0.9, 0.1, 0.9);
+   glRasterPos2d(-0.95, 0.55);
+   for (ii=msg.begin(); ii!=msg.end(); ++ii)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *ii);
+
+   msg = string("S     Toggle control pts [")
+       + (drawcontrolpts ? "X" : " ")
+       + "]";
+   glColor3d(0.1, 0.1, 0.9);
+   glRasterPos2d(-0.95, 0.45);
+   for (ii=msg.begin(); ii!=msg.end(); ++ii)
+      glutBitmapCharacter(GLUT_BITMAP_9_BY_15, *ii);
+
+   glutSwapBuffers();
+}
+
+
+// reshape
+// The GLUT reshape function
+void reshape(int w, int h)
+{
+   glViewport(0, 0, w, h);
+
+   glMatrixMode(GL_PROJECTION);
+   glLoadIdentity();
+   // We set up coordinate system so that aspect ratios are always correct,
+   //  and the region from -1..1 in x & y always just fits in the viewport.
+   if (w > h)
+   {
+      gluOrtho2D(-double(w)/h, double(w)/h, -1., 1.);
+   }
+   else
+   {
+      gluOrtho2D( -1., 1., -double(h)/w, double(h)/w);
+   }
+
+   glMatrixMode(GL_MODELVIEW);  // Always go back to modelview mode
+   glLoadIdentity();
+}
+
+
+// keyboard
+// The GLUT keyboard function
+void keyboard(unsigned char key, int x, int y)
+{
+   switch (key)
+   {
+   case 27:  // Escape Key -- good way to quit
+      exit(0);  // Quit
+      break;
+   case 'q':
+   case 'Q':
+      drawcurve = !drawcurve;
+      glutPostRedisplay();
+      break;
+   case 'w':
+   case 'W':
+      drawcurvepts = !drawcurvepts;
+      glutPostRedisplay();
+      break;
+   case 'a':
+   case 'A':
+      drawcontrolpoly = !drawcontrolpoly;
+      glutPostRedisplay();
+      break;
+   case 's':
+   case 'S':
+      drawcontrolpts = !drawcontrolpts;
+      glutPostRedisplay();
+      break;
+   }
+}
+
+
+// special
+// The GLUT special function
+void special(int key, int x, int y)
+{
+   switch (key)
+   {
+   case GLUT_KEY_LEFT:
+      --numdrawsegs;
+      if (numdrawsegs < minnumdrawsegs) numdrawsegs = minnumdrawsegs;
+      glutPostRedisplay();
+      break;
+   case GLUT_KEY_RIGHT:
+      ++numdrawsegs;
+      if (numdrawsegs > maxnumdrawsegs) numdrawsegs = maxnumdrawsegs;
+      glutPostRedisplay();
+      break;
+   }
+}
+
+
+// idle
+// The GLUT idle function
+void idle()
+{
+   // Print OpenGL errors, if there are any (for debugging)
+   if (GLenum err = glGetError())
+   {
+      cerr << "OpenGL ERROR: " << gluErrorString(err) << endl;
+   }
+}
+
+
+// init
+// Initializes GL states
+// Called by main
+void init()
+{
+   // Set background color
+   glClearColor(1.0, 1.0, 1.0, 0.0);
+
+   // Set up Bezier curve evaluator
+   glMap1f(GL_MAP1_VERTEX_3,   // target: 1-d [curve], 3 coord's per pt
+           0.0, 1.0,           // start & end param value
+           3,                  // "stride": pts stored 3 GLfloat's apart
+           numcontrolpts,      // no. of control points
+           &controlpts[0][0]); // control pt data
+   glEnable(GL_MAP1_VERTEX_3); // Enable this evaluator
+}
+
+
+int main(int argc, char ** argv)
+{
+// Initialize OpenGL/GLUT
+   glutInit(&argc, argv);
+   glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB);
+
+// Make a window
+   glutInitWindowSize(startwinsize, startwinsize);
+   glutInitWindowPosition(50, 50);
+   glutCreateWindow("CS 381 - OpenGL Evaluator Demo");
+
+// Initialize GL states & register callbacks
+   init();
+   glutDisplayFunc(display);
+   glutReshapeFunc(reshape);
+   glutKeyboardFunc(keyboard);
+   glutSpecialFunc(special);
+   glutIdleFunc(idle);
+
+// Do something
+   glutMainLoop();
+
+   return 0;
+}
+
+
+/*
+ * Copyright (c) 1993-1999, Silicon Graphics, Inc.
+ * ALL RIGHTS RESERVED 
+ * Permission to use, copy, modify, and distribute this software for 
+ * any purpose and without fee is hereby granted, provided that the above
+ * copyright notice appear in all copies and that both the copyright notice
+ * and this permission notice appear in supporting documentation, and that 
+ * the name of Silicon Graphics, Inc. not be used in advertising
+ * or publicity pertaining to distribution of the software without specific,
+ * written prior permission. 
+ *
+ * THE MATERIAL EMBODIED ON THIS SOFTWARE IS PROVIDED TO YOU "AS-IS"
+ * AND WITHOUT WARRANTY OF ANY KIND, EXPRESS, IMPLIED OR OTHERWISE,
+ * INCLUDING WITHOUT LIMITATION, ANY WARRANTY OF MERCHANTABILITY OR
+ * FITNESS FOR A PARTICULAR PURPOSE.  IN NO EVENT SHALL SILICON
+ * GRAPHICS, INC.  BE LIABLE TO YOU OR ANYONE ELSE FOR ANY DIRECT,
+ * SPECIAL, INCIDENTAL, INDIRECT OR CONSEQUENTIAL DAMAGES OF ANY
+ * KIND, OR ANY DAMAGES WHATSOEVER, INCLUDING WITHOUT LIMITATION,
+ * LOSS OF PROFIT, LOSS OF USE, SAVINGS OR REVENUE, OR THE CLAIMS OF
+ * THIRD PARTIES, WHETHER OR NOT SILICON GRAPHICS, INC.  HAS BEEN
+ * ADVISED OF THE POSSIBILITY OF SUCH LOSS, HOWEVER CAUSED AND ON
+ * ANY THEORY OF LIABILITY, ARISING OUT OF OR IN CONNECTION WITH THE
+ * POSSESSION, USE OR PERFORMANCE OF THIS SOFTWARE.
+ * 
+ * US Government Users Restricted Rights 
+ * Use, duplication, or disclosure by the Government is subject to
+ * restrictions set forth in FAR 52.227.19(c)(2) or subparagraph
+ * (c)(1)(ii) of the Rights in Technical Data and Computer Software
+ * clause at DFARS 252.227-7013 and/or in similar or successor
+ * clauses in the FAR or the DOD or NASA FAR Supplement.
+ * Unpublished-- rights reserved under the copyright laws of the
+ * United States.  Contractor/manufacturer is Silicon Graphics,
+ * Inc., 2011 N.  Shoreline Blvd., Mountain View, CA 94039-7311.
+ *
+ * OpenGL(R) is a registered trademark of Silicon Graphics, Inc.
+ */
+
+/*  bezcurve.c			
+ *  This program uses evaluators to draw a Bezier curve.
+ */
+
+#include <GL/glut.h>
+#include <stdlib.h>
+
+GLfloat ctrlpoints[4][3] = {
+	{ -4.0, -4.0, 0.0}, { -2.0, 4.0, 0.0}, 
+	{2.0, -4.0, 0.0}, {4.0, 4.0, 0.0}};
+
+void init(void)
+{
+   glClearColor(0.0, 0.0, 0.0, 0.0);
+   glShadeModel(GL_FLAT);
+   glMap1f(GL_MAP1_VERTEX_3, 0.0, 1.0, 3, 4, &ctrlpoints[0][0]);
+   glEnable(GL_MAP1_VERTEX_3);
+}
+
+void display(void)
+{
+   int i;
+
+   glClear(GL_COLOR_BUFFER_BIT);
+   glColor3f(1.0, 1.0, 1.0);
+   glBegin(GL_LINE_STRIP);
+      for (i = 0; i <= 30; i++) 
+         glEvalCoord1f((GLfloat) i/30.0);
+   glEnd();
+   /* The following code displays the control points as dots. */
+   glPointSize(5.0);
+   glColor3f(1.0, 1.0, 0.0);
+   glBegin(GL_POINTS);
+      for (i = 0; i < 4; i++) 
+         glVertex3fv(&ctrlpoints[i][0]);
+   glEnd();
+   glFlush();
+}
+
+void reshape(int w, int h)
+{
+   glViewport(0, 0, (GLsizei) w, (GLsizei) h);
+   glMatrixMode(GL_PROJECTION);
+   glLoadIdentity();
+   if (w <= h)
+      glOrtho(-5.0, 5.0, -5.0*(GLfloat)h/(GLfloat)w, 
+               5.0*(GLfloat)h/(GLfloat)w, -5.0, 5.0);
+   else
+      glOrtho(-5.0*(GLfloat)w/(GLfloat)h, 
+               5.0*(GLfloat)w/(GLfloat)h, -5.0, 5.0, -5.0, 5.0);
+   glMatrixMode(GL_MODELVIEW);
+   glLoadIdentity();
+}
+
+void keyboard(unsigned char key, int x, int y)
+{
+   switch (key) {
+      case 27:
+         exit(0);
+         break;
+   }
+}
+
+int main(int argc, char** argv)
+{
+   glutInit(&argc, argv);
+   glutInitDisplayMode (GLUT_SINGLE | GLUT_RGB);
+   glutInitWindowSize (500, 500);
+   glutInitWindowPosition (100, 100);
+   glutCreateWindow (argv[0]);
+   init ();
+   glutDisplayFunc(display);
+   glutReshapeFunc(reshape);
+   glutKeyboardFunc (keyboard);
+   glutMainLoop();
+   return 0;
+}
+
